@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bezier-encoder"
+version = "0.0.1"
+authors = [
+    {name="Lorenz Häusler", email="Haeusler.Lorenz@gmail.com"}
+]
+description = "Prototyping repository for Bezier curve driven Ambisonics encoder."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+dependencies = ["plotly==5.19.0", "numpy==1.26.4", "dash==2.16.1"]
+
+[project.optional-dependencies]
+dev=["ruff", "pre-commit", "pytest", "coverage"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select=["D", "E", "F", "I", "N", "W"]
+ignore=["W191", "E111", "E114", "E117", "D206", "D300"]
+fixable=["ALL"]
+unfixable=["F401"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py"=["E402", "D104"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.pydocstyle]
+convention = "google"
