@@ -1,7 +1,7 @@
 import numpy as np
 import plotly.graph_objects as go
 
-from bezier_encoder.classes.points import PointCartesian
+from bezier_encoder.classes.points import Point, Points
 
 
 def generate_sphere_fig():
@@ -25,6 +25,7 @@ def generate_sphere_fig():
             center=dict(x=0, y=0, z=0),
             eye=dict(x=1.25, y=1.25, z=1.25),
         ),
+        margin=dict(l=0, r=0, t=0, b=0),
     )
     fig.update(
         layout_showlegend=False,
@@ -32,67 +33,78 @@ def generate_sphere_fig():
     return fig
 
 
-def add_points(
-    fig: go.Figure, anchor_points: list[PointCartesian], control_points: list[PointCartesian]
-):
-    for i, anchor_point in enumerate(anchor_points):
+def update_points(fig: go.Figure, a_points: Points, c_points: Points) -> go.Figure:
+    for i in range(a_points.num_points):
         if i == 0:
             fig.add_trace(
                 go.Scatter3d(
-                    x=[anchor_point.x],
-                    y=[anchor_point.y],
-                    z=[anchor_point.z],
+                    x=[a_points.x[i]],
+                    y=[a_points.y[i]],
+                    z=[a_points.z[i]],
                     mode="markers",
                     marker=dict(size=5, color="red"),
-                    name="Control Points",
+                    name="anchor_start",
                 )
             )
-        elif i == len(anchor_points) - 1:
+        elif i == a_points.num_points - 1:
             fig.add_trace(
                 go.Scatter3d(
-                    x=[anchor_point.x],
-                    y=[anchor_point.y],
-                    z=[anchor_point.z],
+                    x=[a_points.x[i]],
+                    y=[a_points.y[i]],
+                    z=[a_points.z[i]],
                     mode="markers",
                     marker=dict(size=5, color="green"),
-                    name="Control Points",
+                    name="anchor",
                 )
             )
         else:
             fig.add_trace(
                 go.Scatter3d(
-                    x=[anchor_point.x],
-                    y=[anchor_point.y],
-                    z=[anchor_point.z],
+                    x=[a_points.x[i]],
+                    y=[a_points.y[i]],
+                    z=[a_points.z[i]],
                     mode="markers",
                     marker=dict(size=5, color="black"),
-                    name="Control Points",
+                    name="anchor_end",
                 )
             )
-    for control_point in control_points:
+    for i in range(c_points.num_points):
         fig.add_trace(
             go.Scatter3d(
-                x=[control_point.x],
-                y=[control_point.y],
-                z=[control_point.z],
+                x=[c_points.x[i]],
+                y=[c_points.y[i]],
+                z=[c_points.z[i]],
                 mode="markers",
                 marker=dict(size=5, color="blue"),
-                name="Control Points",
+                name="control",
             )
         )
     return fig
 
 
-# def add_bezier_curve(fig: go.Figure, points: list[PointCartesian]) -> go.Figure:
-#     for control_point in control_points:
-#         fig.add_trace(
-#             go.Scatter3d(
-#                 x=[control_point.x],
-#                 y=[control_point.y],
-#                 z=[control_point.z],
-#                 mode="markers",
-#                 marker=dict(size=5, color="blue"),
-#                 name="Control Points",
-#             )
-#         )
-#     return fig
+def update_point(fig: go.Figure, point: Point) -> go.Figure:
+    fig.add_trace(
+        go.Scatter3d(
+            x=[point.x],
+            y=[point.y],
+            z=[point.z],
+            mode="markers",
+            marker=dict(size=10, color="orange"),
+            name="direction",
+        )
+    )
+    return fig
+
+
+def update_curve(fig: go.Figure, points: Points) -> go.Figure:
+    fig.add_trace(
+        go.Scatter3d(
+            x=points.x,
+            y=points.y,
+            z=points.z,
+            mode="lines",
+            line=dict(color="red", width=4),
+            name="curve",
+        )
+    )
+    return fig

@@ -6,7 +6,7 @@ import bezier_encoder.classes.coordinates as coordinates
 import bezier_encoder.utils.lin_alg as lin_alg
 
 
-class PointCartesian:
+class Point:
     def __init__(self, x: float, y: float, z: float) -> None:
         self.data: np.ndarray = np.array([x, y, z])
 
@@ -45,28 +45,28 @@ class PointCartesian:
     def z(self, z: float):
         self.data[coordinates.Z] = z
 
-    def dot(self, other: PointCartesian) -> float:
+    def dot(self, other: Point) -> float:
         return np.sum(self.data * other.data)  # type: ignore
 
-    def __add__(self, other: PointCartesian | float | int):
-        if isinstance(other, PointCartesian):
-            return PointCartesian.from_data(self.data + other.data)
-        return PointCartesian.from_data(self.data + other)
+    def __add__(self, other: Point | float | int):
+        if isinstance(other, Point):
+            return Point.from_data(self.data + other.data)
+        return Point.from_data(self.data + other)
 
-    def __sub__(self, other: PointCartesian | float | int):
-        if isinstance(other, PointCartesian):
-            return PointCartesian.from_data(self.data - other.data)
-        return PointCartesian.from_data(self.data - other)
+    def __sub__(self, other: Point | float | int):
+        if isinstance(other, Point):
+            return Point.from_data(self.data - other.data)
+        return Point.from_data(self.data - other)
 
-    def __mul__(self, other: PointCartesian | float | int):
-        if isinstance(other, PointCartesian):
-            return PointCartesian.from_data(self.data * other.data)
-        return PointCartesian.from_data(self.data * other)
+    def __mul__(self, other: Point | float | int):
+        if isinstance(other, Point):
+            return Point.from_data(self.data * other.data)
+        return Point.from_data(self.data * other)
 
-    def __truediv__(self, other: PointCartesian | float | int):
-        if isinstance(other, PointCartesian):
-            return PointCartesian.from_data(self.data / other.data)
-        return PointCartesian.from_data(self.data / other)
+    def __truediv__(self, other: Point | float | int):
+        if isinstance(other, Point):
+            return Point.from_data(self.data / other.data)
+        return Point.from_data(self.data / other)
 
     def to_polar(self) -> PointPolar:
         return PointPolar.from_cartesian(self.x, self.y, self.z)
@@ -105,13 +105,104 @@ class PointPolar:
     def r(self, r: float):
         self.data[coordinates.R] = r
 
-    def to_cartesian(self) -> PointCartesian:
-        return PointCartesian.from_polar(self.phi, self.theta, self.r)
+    def to_cartesian(self) -> Point:
+        return Point.from_polar(self.phi, self.theta, self.r)
+
+
+class Points:
+    def __init__(self, data: np.ndarray):
+        assert data.ndim == 2
+        assert data.shape[1] == 3
+        self.data = data
+
+    @classmethod
+    def from_xyz(
+        cls,
+        x: np.ndarray | list[float],
+        y: np.ndarray | list[float],
+        z: np.ndarray | list[float],
+    ):
+        return cls(np.array([x, y, z]).T)
+
+    @classmethod
+    def from_list(cls, points: list[Point]):
+        return cls(np.array([p.data for p in points]))
+
+    @classmethod
+    def empty(cls):
+        return cls(np.array([], dtype=np.float64).reshape(0, 3))
+
+    def append(self, point: Point):
+        self.data = np.concatenate([self.data, point.data[np.newaxis, :]])
+
+    def append_xyz(self, x: float, y: float, z: float):
+        self.data = np.concatenate([self.data, np.array([x, y, z])[np.newaxis, :]])
+
+    @property
+    def x(self):
+        return self.data[:, coordinates.X]
+
+    @property
+    def y(self):
+        return self.data[:, coordinates.Y]
+
+    @property
+    def z(self):
+        return self.data[:, coordinates.Z]
+
+    @property
+    def num_points(self):
+        return self.data.shape[0]
+
+    def dot(self, other: Point | Points) -> np.ndarray:
+        if isinstance(other, Points):
+            assert self.data.shape == other.data.shape
+        return np.sum(self.data * other.data, axis=-1)  # type: ignore
+
+    def __add__(self, other: Point | float | int):
+        if isinstance(other, Point):
+            return Points(self.data + other.data)
+        return Points(self.data + other)
+
+    def __sub__(self, other: Point | float | int):
+        if isinstance(other, Point):
+            return Points(self.data - other.data)
+        return Points(self.data - other)
+
+    def __mul__(self, other: Point | float | int):
+        if isinstance(other, Point):
+            return Points(self.data * other.data)
+        return Points(self.data * other)
+
+    def __truediv__(self, other: Point | float | int):
+        if isinstance(other, Point):
+            return Points(self.data / other.data)
+        return Points(self.data / other)
+
+    def __getitem__(self, key) -> Point | Points:
+        if isinstance(key, slice):
+            n_entries = len(range(*key.indices(self.num_points)))
+        elif isinstance(key, int):
+            n_entries = 1
+        else:
+            raise KeyError(
+                "invalid Key. Only integers and slices are supported and "
+                "only the first dimension can be indexed."
+            )
+
+        ret = self.data[key]
+        if n_entries == 1:
+            return Point.from_data(ret.squeeze())
+        elif n_entries == 0:
+            return Points.empty()
+        else:
+            return Points(ret)
 
 
 class Rotation:
     def __init__(self, yaw: float, pitch: float, roll: float) -> None:
         self.data = np.array([yaw, pitch, roll])
+        self.rot_mat = self.create_rotation_matrix()
 
     @property
     def yaw(self):
@@ -137,26 +228,52 @@ class Rotation:
     def roll(self, roll: float):
         self.data[coordinates.ROLL] = roll
 
-    def rotate_point(self, point: PointCartesian) -> PointCartesian:
-        x = point.x
-        y = point.y
-        z = point.z
+    def create_rotation_matrix(self):
+        rz = np.array(
+            [
+                [np.cos(self.yaw), -np.sin(self.yaw), 0],
+                [np.sin(self.yaw), np.cos(self.yaw), 0],
+                [0, 0, 1],
+            ]
+        )
+        ry = np.array(
+            [
+                [np.cos(self.pitch), 0, np.sin(self.pitch)],
+                [0, 1, 0],
+                [-np.sin(self.pitch), 0, np.cos(self.pitch)],
+            ]
+        )
+        rx = np.array(
+            [
+                [1, 0, 0],
+                [0, np.cos(self.roll), -np.sin(self.roll)],
+                [0, np.sin(self.roll), np.cos(self.roll)],
+            ]
+        )
+        rot_mat = rz @ ry @ rx
+        return rot_mat
+
+    def rotate_point(self, point: Point) -> Point:
+        x = float(point.x)
+        y = float(point.y)
+        z = float(point.z)
+        # Rotate around the z-axis
+        x, y = (
+            x * np.cos(self.roll) - y * np.sin(self.roll),
+            x * np.sin(self.roll) + y * np.cos(self.roll),
+        )
+        # Rotate around the y-axis
+        x, z = (
+            x * np.cos(self.pitch) + z * np.sin(self.pitch),
+            -x * np.sin(self.pitch) + z * np.cos(self.pitch),
+        )
         # Rotate around the x-axis
-        x, y, z = (
-            x,
+        y, z = (
             y * np.cos(self.yaw) - z * np.sin(self.yaw),
             y * np.sin(self.yaw) + z * np.cos(self.yaw),
         )
-        # Rotate around the y-axis
-        x, y, z = (
-            x * np.cos(self.pitch) + z * np.sin(self.pitch),
-            y,
-            -x * np.sin(self.pitch) + z * np.cos(self.pitch),
-        )
-        # Rotate around the z-axis
-        x, y, z = (
-            x * np.cos(self.roll) - y * np.sin(self.roll),
-            x * np.sin(self.roll) + y * np.cos(self.roll),
-            z,
-        )
-        return PointCartesian(x, y, z)
+
+        return Point(x, y, z)
+
+    def rotate_points(self, points: Points):
+        return Points(points.data @ self.rot_mat)
